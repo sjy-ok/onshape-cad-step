@@ -33,6 +33,8 @@
     ```
     The results are still saved in the `data/processed` folder.
 
+- Note: Do not include "/" at the end of the folder names mentioned above.
+
 
 # Acknowledgments
 - [Onshape-public/apikey](https://github.com/onshape-public/apikey)

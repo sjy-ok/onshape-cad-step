@@ -2,7 +2,6 @@
 import os
 import yaml
 import argparse
-from joblib import delayed, Parallel
 from myclient import MyClient
 import time
 import logging
@@ -79,8 +78,10 @@ def process_one_step(data_id, link, save_dir):
         # 轮询等待导出完成
         max_attempts = 30  # 最大尝试次数
         attempts = 0
+        start_time = time.time()
+        absolute_timeout = 60  # 绝对超时时间，秒
         while True:
-            if attempts >= max_attempts:
+            if attempts >= max_attempts or time.time() - start_time > absolute_timeout:
                 logging.error("[{}] STEP导出超时".format(data_id))
                 return 0, data_id, link
 
@@ -110,31 +111,6 @@ def process_one_step(data_id, link, save_dir):
         return 0, data_id, link
 
 
-def save_failed_models(failed_models, batch_id, data_root, timestamp):
-    """
-    将处理失败的模型信息保存为YAML文件
-    
-    Args:
-        failed_models (dict): 处理失败的模型信息，格式为 {data_id: link}
-        batch_id (str): 批次ID
-        data_root (str): 数据根目录
-    """
-    if not failed_models:
-        return
-    
-    # 创建带时间戳的失败模型信息保存目录
-    failed_dir = os.path.join(data_root, "failed_{}".format(timestamp))
-    if not os.path.exists(failed_dir):
-        os.makedirs(failed_dir)
-    
-    # 保存失败的模型信息 - 使用Python 2.7兼容的方式
-    failed_path = os.path.join(failed_dir, "failed_models_{}.yml".format(batch_id))
-    with open(failed_path, 'w') as fp:
-        yaml.dump(failed_models, fp, allow_unicode=True)
-    
-    logging.info(u"已将失败的模型信息保存到 {}".format(failed_path))
-
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--test", action="store_true", help="test with some examples")
 parser.add_argument("--link_data_folder", default=None, type=str, help="data folder of onshape links from ABC dataset")
@@ -160,7 +136,7 @@ else:
     filenames = sorted(os.listdir(DWE_DIR))
     timestamp = time.strftime('%Y%m%d_%H%M%S')
     for name in filenames:
-        logging.info("====================================")
+        logging.info("===================================="*2)
         batch_id = name.split('.')[0].split('_')[-1]
         logging.info("Processing batch: {}".format(batch_id))
 
@@ -173,16 +149,59 @@ else:
             dwe_data = yaml.safe_load(fp)
 
         total_n = len(dwe_data)
-        results = Parallel(n_jobs=10, verbose=2)(delayed(process_one_step)(data_id, link, save_dir)
-                                            for data_id, link in dwe_data.items())
         
-        # 处理结果
-        success_count = sum(1 for result in results if result[0] > 0)
-        failed_models = {result[1]: result[2] for result in results if result[0] == 0 and result[1] is not None}
+        # 创建失败模型记录文件路径
+        failed_dir = os.path.join(DATA_ROOT, "failed_{}".format(timestamp))
+        if not os.path.exists(failed_dir):
+            os.makedirs(failed_dir)
+        failed_path = os.path.join(failed_dir, "failed_models_{}.yml".format(batch_id))
         
-        logging.info("valid/total: {}/{}".format(success_count, total_n))
+        # 初始化失败模型字典，如果文件已存在则加载
+        failed_models = {}
+        if os.path.exists(failed_path):
+            with open(failed_path, 'r') as fp:
+                failed_models = yaml.safe_load(fp) or {}
         
-        # 保存失败的模型信息
+        success_count = 0
+        processed_count = 0
+        need_update_failed = False
+        
+        # 获取所有ID并按递增顺序排序
+        sorted_ids = sorted(dwe_data.keys())
+        # logging.info(u"按ID递增顺序处理 {} 个模型".format(len(sorted_ids)))
+        
+        # 按排序后的ID顺序处理每个模型
+        for data_id in sorted_ids:
+            link = dwe_data[data_id]
+            processed_count += 1
+            result = process_one_step(data_id, link, save_dir)
+            
+            if result[0] > 0:
+                success_count += 1
+                # 每处理100个模型提醒一次进度，或者最后一个模型
+                if processed_count % 100 == 0 or processed_count == total_n:
+                    logging.info(u"------Current Progress: Valid/Total: {}/{} (Processed: {})".format(success_count, total_n, processed_count))
+            else:
+                # 模型处理失败，记录信息
+                if result[1] is not None:
+                    failed_models[result[1]] = result[2]
+                    # logging.error(u"模型 {} 处理失败".format(data_id))
+                    need_update_failed = True
+            
+            # 每处理100个模型更新一次失败记录，或者最后一个模型
+            if (need_update_failed and processed_count % 100 == 0) or processed_count == total_n:
+                if failed_models:
+                    with open(failed_path, 'w') as fp:
+                        yaml.dump(failed_models, fp, allow_unicode=True)
+                    logging.info(u"√ Updated failed records, currently {} failed models".format(len(failed_models)))
+                    need_update_failed = False
+        
+        logging.info(u"=======批次处理完成，成功/总数: {}/{}".format(success_count, total_n))
+        
+        # 在批次结尾列出失败模型的data_id
         if failed_models:
-            logging.info(u"有 {} 个模型处理失败，正在保存信息".format(len(failed_models)))
-            save_failed_models(failed_models, batch_id, DATA_ROOT, timestamp)
+            failed_ids = failed_models.keys()
+            logging.info(u"=======此批次共有 {} 个模型处理失败，失败模型ID: {}".format(
+                len(failed_ids), ", ".join(failed_ids)))
+        else:
+            logging.info(u"=======此批次所有模型处理成功！！！")
