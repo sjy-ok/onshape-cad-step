@@ -5,6 +5,7 @@ import argparse
 from myclient import MyClient
 import time
 import logging
+import glob
 import sys
 reload(sys)
 sys.setdefaultencoding('utf-8')
@@ -65,6 +66,13 @@ def process_one_step(data_id, link, save_dir):
     # if os.path.exists(save_path):
     #     return 1
 
+    # # 检查是否存在STEP文件
+    # pattern = os.path.join(save_dir, "{}*".format(data_id))
+    # existing_files = glob.glob(pattern)
+    # if existing_files:
+    #     # logging.info("[{}] 已存在STEP文件，跳过处理".format(data_id))
+    #     return 1, data_id, link
+
     v_list = link.split("/")
     did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
 
@@ -73,6 +81,7 @@ def process_one_step(data_id, link, save_dir):
         translation = c.translate_to_step(did, wid, eid)
         translation_id = translation['id']
         translation_name = translation['name']
+        translation_name = translation_name.replace('/', '-')  # 将斜杠替换为连字符
         save_path = os.path.join(save_dir, "{}_{}.step".format(data_id, translation_name))
         
         # 轮询等待导出完成
