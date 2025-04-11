@@ -186,7 +186,7 @@ class Onshape():
         # only parse as json string if we have to
         body = json.dumps(body) if type(body) == dict else body
 
-        res = requests.request(method, url, headers=req_headers, data=body, allow_redirects=False, stream=True)
+        res = requests.request(method, url, headers=req_headers, data=body, allow_redirects=False, stream=True, timeout=(3, 30))
 
         if res.status_code == 307:
             location = urlparse(res.headers["Location"])

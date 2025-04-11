@@ -66,12 +66,12 @@ def process_one_step(data_id, link, save_dir):
     # if os.path.exists(save_path):
     #     return 1
 
-    # # 检查是否存在STEP文件
-    # pattern = os.path.join(save_dir, "{}*".format(data_id))
-    # existing_files = glob.glob(pattern)
-    # if existing_files:
-    #     # logging.info("[{}] 已存在STEP文件，跳过处理".format(data_id))
-    #     return 1, data_id, link
+    # 检查是否存在STEP文件
+    pattern = os.path.join(save_dir, "{}*".format(data_id))
+    existing_files = glob.glob(pattern)
+    if existing_files:
+        # logging.info("[{}] 已存在STEP文件，跳过处理".format(data_id))
+        return 1, data_id, link
 
     v_list = link.split("/")
     did, wid, eid = v_list[-5], v_list[-3], v_list[-1]
@@ -85,7 +85,7 @@ def process_one_step(data_id, link, save_dir):
         save_path = os.path.join(save_dir, "{}_{}.step".format(data_id, translation_name))
         
         # 轮询等待导出完成
-        max_attempts = 30  # 最大尝试次数
+        max_attempts = 10  # 最大尝试次数
         attempts = 0
         start_time = time.time()
         absolute_timeout = 60  # 绝对超时时间，秒
