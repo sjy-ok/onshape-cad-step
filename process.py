@@ -7,6 +7,7 @@ import time
 import logging
 import glob
 import sys
+import random
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
@@ -183,6 +184,9 @@ else:
         for data_id in sorted_ids:
             link = dwe_data[data_id]
             processed_count += 1
+
+            # 全局节流：请求之间间隔5-15秒
+            time.sleep(random.uniform(5.0, 15.0))
             result = process_one_step(data_id, link, save_dir)
             
             if result[0] > 0:
@@ -204,6 +208,10 @@ else:
                         yaml.dump(failed_models, fp, allow_unicode=True)
                     logging.info(u"√ Updated failed records, currently {} failed models".format(len(failed_models)))
                     need_update_failed = False
+
+            # 每处理50个模型休息3-7分钟
+            if processed_count % 50 == 0:
+                time.sleep(random.uniform(180, 420))
         
         logging.info(u"=======批次处理完成，成功/总数: {}/{}".format(success_count, total_n))
         

@@ -27,12 +27,6 @@
     ```
     The results are saved in the `data/processed` folder.
 
-- Check the latest log file. If there are models that were not downloaded, run
-    ```sh
-    $ python process.py --link_data_folder data/failed_{latest timestamp}
-    ```
-    The results are still saved in the `data/processed` folder.
-
 - Note: Do not include "/" at the end of the folder names mentioned above.
 
 
